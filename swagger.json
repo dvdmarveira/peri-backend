@@ -1,0 +1,382 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "API OdontoLegal",
+    "version": "1.0.0",
+    "description": "Documentação completa da API para a plataforma de gerenciamento de casos de odontologia forense."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:5000",
+      "description": "Servidor de Desenvolvimento"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Usuários",
+      "description": "Autenticação e gerenciamento de usuários."
+    },
+    {
+      "name": "Casos",
+      "description": "Gerenciamento de casos periciais."
+    },
+    {
+      "name": "Pacientes",
+      "description": "Gerenciamento de pacientes associados aos casos."
+    },
+    {
+      "name": "Evidências",
+      "description": "Upload e gerenciamento de evidências."
+    },
+    {
+      "name": "Laudos (Reports)",
+      "description": "Criação e download de laudos."
+    },
+    {
+      "name": "Registros Dentários",
+      "description": "Gerenciamento de registros para comparação."
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "User": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string" },
+          "name": { "type": "string" },
+          "email": { "type": "string" },
+          "role": {
+            "type": "string",
+            "enum": ["admin", "perito", "assistente"]
+          }
+        }
+      },
+      "Patient": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string" },
+          "case": { "type": "string" },
+          "nic": { "type": "string" },
+          "nome": { "type": "string" },
+          "genero": {
+            "type": "string",
+            "enum": ["Masculino", "Feminino", "Outro"]
+          },
+          "idade": { "type": "number" },
+          "documento": { "type": "string" },
+          "endereco": { "type": "string" },
+          "corEtnia": { "type": "string" },
+          "odontograma": {
+            "type": "object",
+            "description": "Objeto JSON flexível para dados do odontograma."
+          },
+          "anotacoesAnatomicas": { "type": "string" },
+          "createdBy": { "type": "string" },
+          "updatedBy": { "type": "string" }
+        }
+      },
+      "Case": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string" },
+          "title": { "type": "string" },
+          "description": { "type": "string" },
+          "type": {
+            "type": "string",
+            "enum": ["acidente", "identificacao", "criminal"]
+          },
+          "status": {
+            "type": "string",
+            "enum": ["em_andamento", "finalizado", "arquivado"]
+          },
+          "responsible": { "$ref": "#/components/schemas/User" },
+          "patients": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Patient" }
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "message": { "type": "string" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/api/users/register": {
+      "post": {
+        "tags": ["Usuários"],
+        "summary": "Registra um novo usuário",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string", "example": "Eduardo Bezerra" },
+                  "email": {
+                    "type": "string",
+                    "example": "eduardo.perito@email.com"
+                  },
+                  "password": { "type": "string", "example": "senhaForte123" },
+                  "role": { "type": "string", "example": "perito" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Sucesso" } }
+      }
+    },
+    "/api/users/login": {
+      "post": {
+        "tags": ["Usuários"],
+        "summary": "Autentica um usuário",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": { "type": "string" },
+                  "password": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Sucesso, retorna tokens" } }
+      }
+    },
+    "/api/users/me": {
+      "get": {
+        "tags": ["Usuários"],
+        "summary": "Busca os dados do usuário logado",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/User" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cases": {
+      "post": {
+        "tags": ["Casos"],
+        "summary": "Cria um novo caso",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": { "type": "string" },
+                  "description": { "type": "string" },
+                  "type": {
+                    "type": "string",
+                    "enum": ["acidente", "identificacao", "criminal"]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Caso criado",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Case" }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["Casos"],
+        "summary": "Lista todos os casos",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "Sucesso" } }
+      }
+    },
+    "/api/cases/{id}": {
+      "get": {
+        "tags": ["Casos"],
+        "summary": "Busca um caso por ID",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Case" }
+              }
+            }
+          },
+          "404": { "description": "Caso não encontrado" }
+        }
+      },
+      "delete": {
+        "tags": ["Casos"],
+        "summary": "Deleta um caso",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Caso deletado" },
+          "404": { "description": "Caso não encontrado" }
+        }
+      }
+    },
+    "/api/patients": {
+      "post": {
+        "tags": ["Pacientes"],
+        "summary": "Adiciona um novo paciente a um caso",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "caseId": { "type": "string" },
+                  "nic": { "type": "string" },
+                  "nome": { "type": "string" },
+                  "genero": { "type": "string" },
+                  "idade": { "type": "number" },
+                  "odontograma": { "type": "object" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Paciente criado" } }
+      }
+    },
+    "/api/patients/case/{caseId}": {
+      "get": {
+        "tags": ["Pacientes"],
+        "summary": "Lista os pacientes de um caso específico",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": { "200": { "description": "Sucesso" } }
+      }
+    },
+    "/api/patients/{patientId}": {
+      "delete": {
+        "tags": ["Pacientes"],
+        "summary": "Deleta um paciente",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "patientId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": { "200": { "description": "Paciente deletado" } }
+      }
+    },
+    "/api/evidences": {
+      "post": {
+        "tags": ["Evidências"],
+        "summary": "Adiciona uma nova evidência a um caso",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "caseId": { "type": "string" },
+                  "type": { "type": "string", "enum": ["imagem", "texto"] },
+                  "content": {
+                    "type": "string",
+                    "description": "Necessário se o tipo for 'texto'"
+                  },
+                  "files": {
+                    "type": "array",
+                    "items": { "type": "string", "format": "binary" },
+                    "description": "Arquivos de evidência"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Evidência criada" } }
+      }
+    },
+    "/api/reports/generate-pdf/{caseId}": {
+      "get": {
+        "tags": ["Laudos (Reports)"],
+        "summary": "Gera e faz o download de um laudo em PDF",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso, retorna um arquivo PDF.",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": { "description": "Caso não encontrado" }
+        }
+      }
+    }
+  }
+}

@@ -5,32 +5,41 @@ const auth = require("../middleware/auth");
 const { validate } = require("../middleware/validate");
 const Joi = require("joi");
 
-// Schema de validação para criação/atualização de paciente
 const patientSchema = Joi.object({
-  name: Joi.string().allow(null, "").optional(),
+  nic: Joi.string().required().messages({
+    "any.required": "O NIC é obrigatório.",
+  }),
+  nome: Joi.string().required().messages({
+    "any.required": "O nome é obrigatório.",
+  }),
+  genero: Joi.string()
+    .valid("Masculino", "Feminino", "Outro")
+    .required()
+    .messages({
+      "any.required": "O gênero é obrigatório.",
+      "any.only": "Gênero deve ser Masculino, Feminino ou Outro.",
+    }),
+  idade: Joi.number().integer().min(0).required().messages({
+    "any.required": "A idade é obrigatória.",
+    "number.base": "A idade deve ser um número.",
+  }),
+  documento: Joi.string().allow(null, ""),
+  endereco: Joi.string().allow(null, ""),
+  corEtnia: Joi.string().allow(null, ""),
+  odontograma: Joi.object().optional(),
+  anotacoesAnatomicas: Joi.string().allow(null, ""),
   caseId: Joi.string()
-    .pattern(/^[0-9a-fA-F]{22,24}$/)
+    .pattern(/^[0-9a-fA-F]{24}$/)
     .required()
     .messages({
       "string.pattern.base": "ID do caso inválido",
       "any.required": "O ID do caso é obrigatório",
     }),
-  numberOfTeeth: Joi.number().min(0).max(32).required().messages({
-    "number.base": "O número de dentes deve ser um valor numérico",
-    "number.min": "O número de dentes não pode ser negativo",
-    "number.max": "O número de dentes não pode ser maior que 32",
-    "any.required": "O número de dentes é obrigatório",
-  }),
-  hasActiveCavities: Joi.boolean().required().messages({
-    "boolean.base": "A presença de cáries ativas deve ser sim ou não",
-    "any.required": "A informação sobre cáries ativas é obrigatória",
-  }),
 });
 
-// Schema de validação para o parâmetro ID
 const idParamSchema = Joi.object({
   patientId: Joi.string()
-    .pattern(/^[0-9a-fA-F]{22,24}$/)
+    .pattern(/^[0-9a-fA-F]{24}$/)
     .required()
     .messages({
       "string.pattern.base": "ID do paciente inválido",
@@ -38,10 +47,9 @@ const idParamSchema = Joi.object({
     }),
 });
 
-// Schema de validação para o parâmetro caseId
 const caseIdParamSchema = Joi.object({
   caseId: Joi.string()
-    .pattern(/^[0-9a-fA-F]{22,24}$/)
+    .pattern(/^[0-9a-fA-F]{24}$/)
     .required()
     .messages({
       "string.pattern.base": "ID do caso inválido",
@@ -49,9 +57,12 @@ const caseIdParamSchema = Joi.object({
     }),
 });
 
-// Rotas
+// --- ROTAS ---
+
+// Listar todos os pacientes (com paginação)
 router.get("/", auth(), patientController.getAllPatients);
 
+// Criar um novo paciente
 router.post(
   "/",
   auth(["perito", "admin", "assistente"]),
@@ -59,14 +70,7 @@ router.post(
   patientController.createPatient
 );
 
-router.put(
-  "/:patientId",
-  auth(["perito", "admin"]),
-  validate(idParamSchema, "params"),
-  validate(patientSchema),
-  patientController.updatePatient
-);
-
+// Obter um paciente específico por ID
 router.get(
   "/:patientId",
   auth(),
@@ -74,6 +78,7 @@ router.get(
   patientController.getPatientById
 );
 
+// Obter pacientes por ID do caso
 router.get(
   "/case/:caseId",
   auth(),
@@ -81,6 +86,20 @@ router.get(
   patientController.getPatientsByCase
 );
 
+// Atualizar um paciente
+router.put(
+  "/:patientId",
+  auth(["perito", "admin"]),
+  validate(idParamSchema, "params"),
+  validate(
+    patientSchema.fork(Object.keys(patientSchema.describe().keys), (schema) =>
+      schema.optional()
+    )
+  ),
+  patientController.updatePatient
+);
+
+// Deletar um paciente
 router.delete(
   "/:patientId",
   auth(["perito", "admin"]),

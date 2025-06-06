@@ -5,6 +5,8 @@ const errorHandler = require("./middleware/errorHandler");
 const path = require("path");
 const reportRoutes = require("./routes/reportRoutes");
 const mongoose = require("mongoose");
+const swaggerUi = require("swagger-ui-express");
+const swaggerDocument = require("./swagger.json"); // Importa nosso arquivo JSON
 
 require("dotenv").config();
 
@@ -17,7 +19,7 @@ app.use(cors);
 app.use("/uploads", express.static(path.join(__dirname, "public/uploads")));
 app.use(express.static(path.join(__dirname, "frontend/public")));
 app.use("/src", express.static(path.join(__dirname, "frontend/src")));
-
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 app.use("/api/users", require("./routes/userRoutes"));
 app.use("/api/cases", require("./routes/caseRoutes"));
 app.use("/api/evidences", require("./routes/evidenceRoutes"));

@@ -1,12 +1,13 @@
 const Patient = require("../models/Patient");
 const Case = require("../models/Case");
 const ActivityLog = require("../models/ActivityLog");
+const logger = require("../utils/logger"); // Adicionado para consistência
 
+// Função de criação que já ajustamos
 exports.createPatient = async (req, res) => {
   try {
-    const { name, caseId, numberOfTeeth, hasActiveCavities } = req.body;
+    const { caseId, ...patientData } = req.body;
 
-    // Verificar se o caso existe
     const existingCase = await Case.findById(caseId);
     if (!existingCase) {
       return res.status(404).json({
@@ -15,31 +16,18 @@ exports.createPatient = async (req, res) => {
       });
     }
 
-    // Verificar se o caso já tem um paciente
-    const existingPatient = await Patient.findOne({ case: caseId });
-    if (existingPatient) {
-      return res.status(400).json({
-        success: false,
-        message: "Este caso já possui um paciente vinculado",
-      });
-    }
-
     const patient = new Patient({
-      name: name || null,
+      ...patientData,
       case: caseId,
-      numberOfTeeth,
-      hasActiveCavities,
       createdBy: req.user.id,
       updatedBy: req.user.id,
     });
-
     await patient.save();
 
-    // Registrar atividade
     await ActivityLog.create({
       userId: req.user.id,
       action: "Paciente adicionado",
-      details: `Paciente ${patient.identificationStatus} adicionado ao caso ${caseId}`,
+      details: `Paciente ${patient.nome} adicionado ao caso ${caseId}`,
     });
 
     const populatedPatient = await Patient.findById(patient._id)
@@ -53,15 +41,7 @@ exports.createPatient = async (req, res) => {
       data: populatedPatient,
     });
   } catch (error) {
-    // Se o erro for de duplicidade (unique constraint)
-    if (error.code === 11000) {
-      return res.status(400).json({
-        success: false,
-        message: "Este caso já possui um paciente vinculado",
-      });
-    }
-
-    console.error("Erro ao criar paciente:", error);
+    logger.error("Erro ao criar paciente:", error);
     res.status(500).json({
       success: false,
       message: "Erro ao criar paciente",
@@ -70,6 +50,7 @@ exports.createPatient = async (req, res) => {
   }
 };
 
+// Função de atualização
 exports.updatePatient = async (req, res) => {
   try {
     const { patientId } = req.params;
@@ -86,7 +67,6 @@ exports.updatePatient = async (req, res) => {
       });
     }
 
-    // Atualizar paciente
     const updatedPatient = await Patient.findByIdAndUpdate(
       patientId,
       updateData,
@@ -96,11 +76,10 @@ exports.updatePatient = async (req, res) => {
       .populate("createdBy", "name")
       .populate("updatedBy", "name");
 
-    // Registrar atividade
     await ActivityLog.create({
       userId: req.user.id,
       action: "Paciente atualizado",
-      details: `Paciente ${updatedPatient.identificationStatus} atualizado`,
+      details: `Paciente ${updatedPatient.nome} atualizado`,
     });
 
     res.json({
@@ -109,7 +88,7 @@ exports.updatePatient = async (req, res) => {
       data: updatedPatient,
     });
   } catch (error) {
-    console.error("Erro ao atualizar paciente:", error);
+    logger.error("Erro ao atualizar paciente:", error);
     res.status(500).json({
       success: false,
       message: "Erro ao atualizar paciente",
@@ -118,10 +97,10 @@ exports.updatePatient = async (req, res) => {
   }
 };
 
+// Função para buscar um paciente por ID
 exports.getPatientById = async (req, res) => {
   try {
     const { patientId } = req.params;
-
     const patient = await Patient.findById(patientId)
       .populate("case", "title")
       .populate("createdBy", "name")
@@ -139,7 +118,7 @@ exports.getPatientById = async (req, res) => {
       data: patient,
     });
   } catch (error) {
-    console.error("Erro ao buscar paciente:", error);
+    logger.error("Erro ao buscar paciente:", error);
     res.status(500).json({
       success: false,
       message: "Erro ao buscar paciente",
@@ -148,11 +127,10 @@ exports.getPatientById = async (req, res) => {
   }
 };
 
+// Função para buscar pacientes por caso
 exports.getPatientsByCase = async (req, res) => {
   try {
     const { caseId } = req.params;
-
-    // Verificar se o caso existe
     const existingCase = await Case.findById(caseId);
     if (!existingCase) {
       return res.status(404).json({
@@ -162,7 +140,6 @@ exports.getPatientsByCase = async (req, res) => {
     }
 
     const patients = await Patient.find({ case: caseId })
-      .populate("case", "title")
       .populate("createdBy", "name")
       .populate("updatedBy", "name")
       .sort({ createdAt: -1 });
@@ -172,7 +149,7 @@ exports.getPatientsByCase = async (req, res) => {
       data: patients,
     });
   } catch (error) {
-    console.error("Erro ao buscar pacientes do caso:", error);
+    logger.error("Erro ao buscar pacientes do caso:", error);
     res.status(500).json({
       success: false,
       message: "Erro ao buscar pacientes do caso",
@@ -181,11 +158,12 @@ exports.getPatientsByCase = async (req, res) => {
   }
 };
 
+// Função para deletar um paciente
 exports.deletePatient = async (req, res) => {
   try {
     const { patientId } = req.params;
-
     const patient = await Patient.findById(patientId);
+
     if (!patient) {
       return res.status(404).json({
         success: false,
@@ -193,13 +171,14 @@ exports.deletePatient = async (req, res) => {
       });
     }
 
-    await patient.remove();
+    await patient.deleteOne();
 
-    // Registrar atividade
     await ActivityLog.create({
       userId: req.user.id,
       action: "Paciente removido",
-      details: `Paciente ${patient.identificationStatus} removido do caso ${patient.case}`,
+      details: `Paciente ${patient.nome || patient._id} removido do caso ${
+        patient.case
+      }`,
     });
 
     res.json({
@@ -207,7 +186,7 @@ exports.deletePatient = async (req, res) => {
       message: "Paciente removido com sucesso",
     });
   } catch (error) {
-    console.error("Erro ao remover paciente:", error);
+    logger.error("Erro ao remover paciente:", error);
     res.status(500).json({
       success: false,
       message: "Erro ao remover paciente",
@@ -216,6 +195,7 @@ exports.deletePatient = async (req, res) => {
   }
 };
 
+// Função para listar todos os pacientes com paginação
 exports.getAllPatients = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
@@ -226,25 +206,21 @@ exports.getAllPatients = async (req, res) => {
     const patients = await Patient.find()
       .populate("case", "title")
       .populate("createdBy", "name")
-      .populate("updatedBy", "name")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
-
-    const pages = Math.ceil(total / limit);
 
     res.json({
       success: true,
       data: patients,
       pagination: {
         currentPage: page,
-        totalPages: pages,
+        totalPages: Math.ceil(total / limit),
         total,
-        pages,
       },
     });
   } catch (error) {
-    console.error("Erro ao listar pacientes:", error);
+    logger.error("Erro ao listar pacientes:", error);
     res.status(500).json({
       success: false,
       message: "Erro ao listar pacientes",

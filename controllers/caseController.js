@@ -28,17 +28,7 @@ exports.createCase = async (req, res) => {
 
     const populatedCase = await Case.findById(newCase._id)
       .populate("responsible", "name email")
-      .populate("createdBy", "name email")
-      .populate({
-        path: "evidences",
-        select: "type filePath content annotations createdAt",
-        populate: { path: "uploadedBy", select: "name" },
-      })
-      .populate({
-        path: "reports",
-        select: "content pdfPath createdAt",
-        populate: { path: "createdBy", select: "name" },
-      });
+      .populate("createdBy", "name email");
 
     res.status(201).json({
       message: "Caso criado com sucesso",
@@ -62,14 +52,15 @@ exports.updateCaseStatus = async (req, res) => {
     )
       .populate("responsible", "name email")
       .populate("createdBy", "name email")
+      .populate("patients", "nome nic") // Populando também os pacientes aqui
       .populate({
         path: "evidences",
-        select: "type filePath content annotations createdAt",
+        select: "type content createdAt",
         populate: { path: "uploadedBy", select: "name" },
       })
       .populate({
         path: "reports",
-        select: "content pdfPath createdAt",
+        select: "title createdAt",
         populate: { path: "createdBy", select: "name" },
       });
 
@@ -99,7 +90,6 @@ exports.getCases = async (req, res) => {
     const skip = (page - 1) * limit;
 
     const filtro = {};
-
     if (req.query.type) {
       filtro.type = req.query.type;
     }
@@ -111,17 +101,9 @@ exports.getCases = async (req, res) => {
       Case.find(filtro)
         .populate("responsible", "name email")
         .populate("createdBy", "name email")
-        .populate("patient", "name numberOfTeeth hasActiveCavities")
-        .populate({
-          path: "evidences",
-          select: "type filePath content annotations createdAt",
-          populate: { path: "uploadedBy", select: "name" },
-        })
-        .populate({
-          path: "reports",
-          select: "content pdfPath createdAt",
-          populate: { path: "createdBy", select: "name" },
-        })
+        .populate("patients", "nome nic")
+        .populate("evidences", "type")
+        .populate("reports", "title")
         .skip(skip)
         .limit(limit)
         .sort({ createdAt: -1 }),
@@ -154,9 +136,6 @@ exports.getCaseById = async (req, res) => {
   try {
     const caseId = req.params.id;
 
-    // Log para debug
-    console.log("Buscando caso com ID:", caseId);
-
     if (!caseId) {
       return res.status(400).json({
         success: false,
@@ -167,10 +146,10 @@ exports.getCaseById = async (req, res) => {
     const foundCase = await Case.findById(caseId)
       .populate("responsible", "name email")
       .populate("createdBy", "name email")
-      .populate("patient", "name numberOfTeeth hasActiveCavities")
+      .populate("patients")
       .populate({
         path: "evidences",
-        select: "type filePath content annotations createdAt",
+        select: "type filePaths content annotations createdAt",
         populate: { path: "uploadedBy", select: "name" },
       })
       .populate({
@@ -186,15 +165,11 @@ exports.getCaseById = async (req, res) => {
       });
     }
 
-    // Registrar atividade de visualização
     await ActivityLog.create({
       userId: req.user.id,
       action: "Caso visualizado",
       details: caseId,
     });
-
-    // Log do caso encontrado
-    console.log("Caso encontrado:", foundCase._id);
 
     res.status(200).json({
       success: true,
@@ -214,10 +189,6 @@ exports.getCaseById = async (req, res) => {
 exports.deleteCase = async (req, res) => {
   try {
     const caseId = req.params.id;
-
-    // Log para debug
-    console.log("Tentando deletar caso com ID:", caseId);
-
     const caseToDelete = await Case.findById(caseId);
 
     if (!caseToDelete) {
@@ -227,7 +198,6 @@ exports.deleteCase = async (req, res) => {
       });
     }
 
-    // Verificar se o usuário tem permissão para deletar o caso
     if (
       !["admin", "perito"].includes(req.user.role) &&
       caseToDelete.createdBy.toString() !== req.user.id
@@ -240,7 +210,6 @@ exports.deleteCase = async (req, res) => {
 
     await Case.findByIdAndDelete(caseId);
 
-    // Registrar a atividade de deleção
     await ActivityLog.create({
       userId: req.user.id,
       action: "Caso deletado",

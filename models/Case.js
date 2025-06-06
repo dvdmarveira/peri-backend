@@ -24,10 +24,14 @@ const caseSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
-    patient: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Patient",
-    },
+
+    // campo 'patient' trcado por um array 'patients' para suportar múltiplos pacientes
+    patients: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Patient",
+      },
+    ],
     data: { type: Date, required: true, default: Date.now },
     historico: { type: String },
     analises: { type: String },
@@ -49,6 +53,24 @@ caseSchema.virtual("evidenceCount").get(function () {
 // Virtual para contar o número de laudos
 caseSchema.virtual("reportCount").get(function () {
   return this.reports ? this.reports.length : 0;
+});
+
+// <<< NOVO VIRTUAL >>>
+caseSchema.virtual("patientCount").get(function () {
+  return this.patients ? this.patients.length : 0;
+});
+
+// Middleware para deletar pacientes associados quando um caso é removido
+caseSchema.pre("findOneAndDelete", async function (next) {
+  try {
+    const caseId = this.getQuery()["_id"];
+    // Deleta todos os pacientes que referenciam este caso
+    await mongoose.model("Patient").deleteMany({ case: caseId });
+    // adicionar lógicas similares para Evidências e Laudos
+    next();
+  } catch (error) {
+    next(error);
+  }
 });
 
 module.exports = mongoose.model("Case", caseSchema);

@@ -3,6 +3,44 @@ const Case = require("../models/Case");
 const ActivityLog = require("../models/ActivityLog");
 const generatePDF = require("../utils/pdfGenerator");
 const logger = require("../utils/logger");
+const fetch = require("node-fetch");
+
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY; // Recomendado usar variável de ambiente
+
+// Função auxiliar para gerar texto com Gemini
+const gerarTextoComGemini = async (mensagem) => {
+  try {
+    const resposta = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: mensagem }],
+            },
+          ],
+        }),
+      }
+    );
+
+    const dados = await resposta.json();
+
+    if (resposta.ok && dados.candidates && dados.candidates.length > 0) {
+      return dados.candidates[0].content.parts[0].text;
+    } else {
+      logger.error("Erro na resposta da API Gemini:", dados);
+      return null;
+    }
+  } catch (erro) {
+    logger.error("Erro ao acessar API Gemini:", erro);
+    return null;
+  }
+};
 
 exports.createReport = async (req, res) => {
   try {
@@ -41,10 +79,21 @@ exports.createReport = async (req, res) => {
         }))
       : [];
 
+    // Gerar conteúdo adicional com Gemini (opcional)
+    let textoGeradoGemini = await gerarTextoComGemini(
+      `Crie um parecer técnico breve com base no seguinte conteúdo: ${content}`
+    );
+
+    if (textoGeradoGemini) {
+      console.log("Texto gerado pelo Gemini:", textoGeradoGemini);
+    } else {
+      textoGeradoGemini = "";
+    }
+
     const report = new Report({
       case: caseId,
       title,
-      content,
+      content: content + "\n\n---\n\n" + textoGeradoGemini,
       type,
       status: status || "rascunho",
       createdBy: req.user.id,
@@ -52,7 +101,7 @@ exports.createReport = async (req, res) => {
     });
 
     const pdfPath = `${process.env.UPLOAD_DIR}/report-${report._id}.pdf`;
-    await generatePDF({ content }, pdfPath);
+    await generatePDF({ content: report.content }, pdfPath);
     report.pdfPath = pdfPath;
 
     await report.save();
@@ -70,7 +119,6 @@ exports.createReport = async (req, res) => {
       details: report._id,
     });
 
-    // Retorna o laudo populado
     const populatedReport = await Report.findById(report._id)
       .populate("createdBy", "name email")
       .populate("case", "title type");
@@ -91,25 +139,11 @@ exports.createReport = async (req, res) => {
 
 exports.getReports = async (req, res) => {
   try {
-    const { caseId } = req.query;
-    let query = {};
+    const reports = await Report.find()
+      .populate("createdBy", "name email")
+      .populate("case", "title type");
 
-    if (caseId) {
-      query.case = caseId;
-    }
-
-    // Se não for admin, só pode ver laudos dos seus casos
-    if (req.user.role !== "admin") {
-      const userCases = await Case.find({ createdBy: req.user.id });
-      const userCaseIds = userCases.map((c) => c._id);
-      query.case = { $in: userCaseIds };
-    }
-
-    const reports = await Report.find(query)
-      .populate("case", "title type")
-      .populate("createdBy", "name");
-
-    return res.json({
+    return res.status(200).json({
       success: true,
       data: reports,
     });
@@ -125,35 +159,14 @@ exports.getReports = async (req, res) => {
 
 exports.downloadReport = async (req, res) => {
   try {
-    const { reportId } = req.params;
-    const report = await Report.findById(reportId).populate("case");
-
-    if (!report) {
-      return res.status(404).json({ message: "Laudo não encontrado" });
+    const report = await Report.findById(req.params.reportId);
+    if (!report || !report.pdfPath) {
+      return res.status(404).json({ message: "Laudo não encontrado ou sem PDF" });
     }
 
-    // Verificar permissão
-    if (
-      req.user.role !== "admin" &&
-      report.case.createdBy.toString() !== req.user.id
-    ) {
-      return res
-        .status(403)
-        .json({ message: "Sem permissão para baixar este laudo" });
-    }
-
-    // Aqui você pode implementar a lógica de download do arquivo
-    // Por enquanto, vamos retornar os dados do laudo
-    return res.json({
-      success: true,
-      data: report,
-    });
+    res.download(report.pdfPath);
   } catch (error) {
     console.error("Erro ao baixar laudo:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Erro ao baixar laudo",
-      error: error.message,
-    });
+    return res.status(500).json({ message: "Erro ao baixar laudo", error: error.message });
   }
 };

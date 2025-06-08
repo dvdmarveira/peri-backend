@@ -24,7 +24,10 @@ exports.listarEvidencias = async (req, res) => {
 
 exports.uploadEvidence = async (req, res) => {
   try {
-    const { caseId, type, content, annotations } = req.body;
+    // --- ALTERAÇÃO AQUI ---
+    const { caseId, type, content, annotations, latitude, longitude, address } =
+      req.body;
+    // --- FIM DA ALTERAÇÃO ---
     const files = req.files;
 
     if (!caseId || !type) {
@@ -38,31 +41,43 @@ exports.uploadEvidence = async (req, res) => {
       return res.status(404).json({ message: "Caso não encontrado." });
     }
 
-    // Verifica se o tipo exige conteúdo de texto
     if (type === "texto" && !content) {
       return res.status(400).json({
         message: "Conteúdo é obrigatório para evidências do tipo texto.",
       });
     }
 
-    // Se annotations estiver presente, faz a validação para evitar erro de split
     const parsedAnnotations =
       annotations && typeof annotations === "string"
         ? annotations.split(",").map((a) => a.trim())
         : [];
 
-    const evidence = new Evidence({
+    // Monta o objeto da nova evidência
+    const evidenceData = {
       caseId,
       type,
       content: content || "",
       annotations: parsedAnnotations,
       uploadedBy: req.user.id,
       filePaths: files ? files.map((file) => file.path) : [],
-    });
+      // --- ALTERAÇÃO AQUI ---
+      address: address || null, // Adiciona o endereço
+      // --- FIM DA ALTERAÇÃO ---
+    };
+
+    // Adiciona a localização se latitude e longitude forem fornecidas
+    if (latitude && longitude) {
+      evidenceData.location = {
+        type: "Point",
+        // Atenção: A ordem é [longitude, latitude]
+        coordinates: [parseFloat(longitude), parseFloat(latitude)],
+      };
+    }
+
+    const evidence = new Evidence(evidenceData);
 
     await evidence.save();
 
-    // Atualiza o caso com a nova evidência
     await Case.findByIdAndUpdate(
       caseId,
       { $push: { evidences: evidence._id } },
@@ -75,7 +90,6 @@ exports.uploadEvidence = async (req, res) => {
       details: evidence._id,
     });
 
-    // Retorna a evidência populada
     const populatedEvidence = await Evidence.findById(evidence._id)
       .populate("uploadedBy", "name email")
       .populate("caseId", "title type");

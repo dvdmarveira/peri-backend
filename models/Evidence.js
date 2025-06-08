@@ -16,8 +16,28 @@ const evidenceSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+    // --- ALTERAÇÕES AQUI ---
+    location: {
+      type: {
+        type: String,
+        enum: ["Point"],
+        required: false,
+      },
+      coordinates: {
+        type: [Number], // [longitude, latitude]
+        required: false,
+      },
+    },
+    address: {
+      type: String, // Campo de endereço
+      required: false,
+    },
+    // --- FIM DAS ALTERAÇÕES ---
   },
   { timestamps: true }
 );
+
+// Criar um índice geoespacial para otimizar buscas por localização
+evidenceSchema.index({ location: "2dsphere" });
 
 module.exports = mongoose.model("Evidence", evidenceSchema);

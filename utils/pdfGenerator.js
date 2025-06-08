@@ -1,19 +1,34 @@
-const PDFDocument = require('pdfkit');
-const fs = require('fs');
+const PDFDocument = require("pdfkit");
+const fs = require("fs");
 
 const generatePDF = (data, outputPath) => {
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument();
-    const stream = fs.createWriteStream(outputPath);
+    const doc = new PDFDocument({
+      size: "A4",
+      margin: 50,
+    });
 
+    const stream = fs.createWriteStream(outputPath);
     doc.pipe(stream);
-    doc.fontSize(16).text('Laudo Pericial', { align: 'center' });
-    doc.moveDown();
-    doc.fontSize(12).text(data.content);
+
+    // Cabeçalho
+    doc.font("Helvetica-Bold")
+      .fontSize(18)
+      .text("Laudo Pericial", { align: "center" })
+      .moveDown(1.5);
+
+    // Conteúdo (com quebra de linhas)
+    doc.font("Helvetica")
+      .fontSize(12)
+      .text(data.content, {
+        align: "justify",
+        lineGap: 6,
+      });
+
     doc.end();
 
-    stream.on('finish', resolve);
-    stream.on('error', reject);
+    stream.on("finish", resolve);
+    stream.on("error", reject);
   });
 };
 

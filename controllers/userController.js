@@ -75,8 +75,15 @@ exports.loginUser = async (req, res) => {
 
   try {
     const user = await User.findOne({ email });
-    if (!user || !user.isActive)
-      return res.status(400).json({ msg: "Credenciais inválidas" });
+    if (!user) {
+      console.log("Usuário não encontrado");
+    return res.status(400).json({ msg: "Usuário não encontrado" });
+    }
+
+    if (!user.isActive) {
+      console.log("Usuário inativo:", user.email);
+    return res.status(403).json({ msg: "Usuário desativado. Fale com o administrador." });
+    }
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(400).json({ msg: "Credenciais inválidas" });

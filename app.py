@@ -18,13 +18,17 @@ MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/")
 
 # MongoDB Connection
 try:
-    client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
+    client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5001)
     client.server_info()  # Verifica se o servidor está acessível
-    db = client["meu_banco"]  # Banco alinhado com a intenção original
-    colecao = db["meus_dados"]  # Coleção correta
+    db = client["plataforma-odontolegal"]  # Banco alinhado com a intenção original
+    colecao = db["dashboard"]  # Coleção correta
 except Exception as e:
     print(f"Erro ao conectar ao MongoDB: {e}")
     exit(1)
+
+    print("🚀 Backend rodando com sucesso!")
+print("Mongo URI:", MONGO_URI)
+print("Coleção usada:", colecao.name)
 
 @dataclass
 class Vitima:
@@ -179,10 +183,11 @@ def coeficientes_modelo():
         print(f"❌ Erro ao acessar modelo: {e}")
         return jsonify({"error": str(e)}), 500
 
+# ⬇️ ALTERAÇÃO AQUI: porta 5001
 if __name__ == "__main__":
     if colecao.count_documents({}) == 0:
         print("Inserindo dados iniciais...")
         dados_iniciais = gerar_dados_aleatorios(20)
         colecao.insert_many(dados_iniciais)
         print("Dados iniciais inseridos com sucesso.")
-    app.run(debug=True)
+    app.run(debug=True, port=5001)  # <- Porta alterada aqui

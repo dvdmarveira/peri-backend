@@ -8,7 +8,7 @@ import pickle
 
 # 1. Conectar ao MongoDB e puxar dados
 try:
-    client = MongoClient("mongodb://localhost:27017/", serverSelectionTimeoutMS=5000)  # Timeout para conexão
+    client = MongoClient("mongodb://localhost:27017/", serverSelectionTimeoutMS=5001)  # Timeout para conexão
     client.server_info()  # Verifica se o servidor está acessível
     db = client["plataforma-odontolegal"]  # Banco alinhado com Node.js
     colecao = db["dashboard"]  # Coleção correta
@@ -31,6 +31,31 @@ try:
                 "vitima": {"idade": 40, "etnia": "Negra"},
                 "localizacao": "Belo Horizonte",
                 "tipo_do_caso": "Caso A"
+            },
+            {
+                "vitima": {"idade": 28, "etnia": "Indígena"},
+                "localizacao": "Brasília",
+                "tipo_do_caso": "Caso B"
+            },
+            {
+                "vitima": {"idade": 32, "etnia": "Amarela"},
+                "localizacao": "Curitiba",
+                "tipo_do_caso": "Caso A"
+            },
+            {
+                "vitima": {"idade": 50, "etnia": "Branca"},
+                "localizacao": "Florianópolis",
+                "tipo_do_caso": "Caso B"
+            },
+            {
+                "vitima": {"idade": 38, "etnia": "Parda"},
+                "localizacao": "Goiânia",
+                "tipo_do_caso": "Caso A"
+            },
+            {
+                "vitima": {"idade": 42, "etnia": "Negra"},
+                "localizacao": "Recife",
+                "tipo_do_caso": "Caso B"
             }
         ])
         print("Dados de teste inseridos com sucesso.")
@@ -105,9 +130,11 @@ except Exception as e:
 try:
     with open("model.pkl", "wb") as f:
         pickle.dump({
-            "pipeline": pipeline,
-            "label_encoder": label_encoder
-        }, f)
+    "pipeline": pipeline,
+    "label_encoder": label_encoder,
+    "campos_esperados": ["idade", "etnia", "localizacao"]
+}, f)
+
     print("Modelo treinado e salvo em model.pkl")
 except Exception as e:
     print(f"Erro ao salvar o modelo: {e}")

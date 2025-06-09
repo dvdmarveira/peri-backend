@@ -3,7 +3,9 @@ const Case = require("../models/Case");
 const ActivityLog = require("../models/ActivityLog");
 const generatePDF = require("../utils/pdfGenerator");
 const logger = require("../utils/logger");
-const fetch = require("node-fetch");
+const fetch = (...args) =>
+  import("node-fetch").then(({ default: fetch }) => fetch(...args));
+
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY; // Recomendado usar variável de ambiente
 

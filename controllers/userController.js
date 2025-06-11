@@ -1,7 +1,6 @@
 // controllers/userController.js
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const crypto = require("crypto");
 const User = require("../models/User");
 const ActivityLog = require("../models/ActivityLog");
 const sendEmail = require("../utils/email");
@@ -22,18 +21,13 @@ const generateTokens = (user) => {
   return { accessToken, refreshToken };
 };
 exports.getAllUsers = async (req, res) => {
-  const users = await User.find({}, "-password");
-  res.status(200).json(users);
-};
-
-exports.updateUserRole = async (req, res) => {
-  const { id } = req.params;
-  const { role } = req.body;
-  if (!["admin", "perito", "assistente"].includes(role)) {
-    return res.status(400).json({ msg: "Papel inválido" });
+  try {
+    const users = await User.find({}, "-password -refreshToken");
+    res.status(200).json(users);
+  } catch (error) {
+    logger.error("Erro ao buscar todos os usuários:", error);
+    res.status(500).json({ msg: "Erro no servidor" });
   }
-  const user = await User.findByIdAndUpdate(id, { role }, { new: true });
-  res.status(200).json(user);
 };
 
 exports.registerUser = async (req, res) => {
@@ -51,7 +45,6 @@ exports.registerUser = async (req, res) => {
     });
 
     await user.save();
-    console.log("Usuário salvo no banco:", user);
     await ActivityLog.create({
       userId: user._id,
       action: "Usuário registrado",
@@ -59,7 +52,6 @@ exports.registerUser = async (req, res) => {
 
     const { accessToken, refreshToken } = generateTokens(user);
 
-    // Salvar o refresh token no banco de dados
     user.refreshToken = refreshToken;
     await user.save();
 
@@ -76,13 +68,13 @@ exports.loginUser = async (req, res) => {
   try {
     const user = await User.findOne({ email });
     if (!user) {
-      console.log("Usuário não encontrado");
-    return res.status(400).json({ msg: "Usuário não encontrado" });
+      return res.status(400).json({ msg: "Usuário não encontrado" });
     }
 
     if (!user.isActive) {
-      console.log("Usuário inativo:", user.email);
-    return res.status(403).json({ msg: "Usuário desativado. Fale com o administrador." });
+      return res
+        .status(403)
+        .json({ msg: "Usuário desativado. Fale com o administrador." });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
@@ -90,13 +82,11 @@ exports.loginUser = async (req, res) => {
 
     const { accessToken, refreshToken } = generateTokens(user);
 
-    // Salvar o refresh token no banco de dados
     user.refreshToken = refreshToken;
     await user.save();
 
     await ActivityLog.create({ userId: user._id, action: "Login realizado" });
 
-    // Buscar usuário com campos selecionados (igual ao getMe)
     const userWithoutSensitiveData = await User.findById(user._id).select(
       "-password -refreshToken"
     );
@@ -134,31 +124,24 @@ exports.refreshToken = async (req, res) => {
   }
 
   try {
-    // Verificar se o token é válido
     const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
-
-    // Verificar se o usuário existe e se o token armazenado corresponde
     const user = await User.findById(decoded.userId);
 
     if (!user || user.refreshToken !== refreshToken) {
       return res.status(403).json({ msg: "Refresh token inválido" });
     }
 
-    // Gerar novos tokens
     const { accessToken, refreshToken: newRefreshToken } = generateTokens(user);
 
-    // Atualizar o refresh token no banco de dados
     user.refreshToken = newRefreshToken;
     await user.save();
 
     res.json({ token: accessToken, refreshToken: newRefreshToken });
   } catch (error) {
     logger.error("Erro ao renovar token:", error);
-
     if (error.name === "TokenExpiredError") {
       return res.status(403).json({ msg: "Refresh token expirado" });
     }
-
     res.status(403).json({ msg: "Token inválido" });
   }
 };
@@ -170,9 +153,8 @@ exports.forgotPassword = async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ msg: "Usuário não encontrado" });
 
-    // Gera um código numérico de 6 dígitos
     const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
-    user.resetPasswordToken = resetCode; // Reutilizamos o campo existente
+    user.resetPasswordToken = resetCode;
     user.resetPasswordExpire = Date.now() + 3600000; // 1 hora
     await user.save();
 
@@ -215,20 +197,83 @@ exports.resetPassword = async (req, res) => {
 
 exports.logoutUser = async (req, res) => {
   try {
-    const { refreshToken } = req.body;
-
-    if (refreshToken) {
-      // Encontrar o usuário com este refresh token e removê-lo
-      const user = await User.findOne({ refreshToken });
-      if (user) {
-        user.refreshToken = undefined;
-        await user.save();
-      }
+    const user = await User.findById(req.user.id);
+    if (user) {
+      user.refreshToken = undefined;
+      await user.save();
     }
-
     res.status(200).json({ msg: "Logout realizado com sucesso" });
   } catch (error) {
     logger.error("Erro ao realizar logout:", error);
     res.status(500).json({ msg: "Erro ao realizar logout" });
+  }
+};
+
+// --- NOVAS FUNÇÕES DE ATUALIZAÇÃO ---
+
+// Função para o usuário logado atualizar o próprio perfil
+exports.updateMyProfile = async (req, res) => {
+  try {
+    const { name, email } = req.body;
+    const userId = req.user.id;
+
+    const updateData = {};
+    if (name) updateData.name = name;
+    if (email) updateData.email = email;
+
+    const updatedUser = await User.findByIdAndUpdate(userId, updateData, {
+      new: true,
+      runValidators: true,
+    }).select("-password -refreshToken");
+
+    if (!updatedUser) {
+      return res.status(404).json({ msg: "Usuário não encontrado." });
+    }
+
+    res.json({ msg: "Perfil atualizado com sucesso.", user: updatedUser });
+  } catch (error) {
+    logger.error("Erro ao atualizar perfil do usuário:", error);
+    if (error.code === 11000) {
+      return res.status(400).json({ msg: "Este e-mail já está em uso." });
+    }
+    res.status(500).json({ msg: "Erro no servidor" });
+  }
+};
+
+// Função para o admin atualizar qualquer usuário
+exports.updateUser = async (req, res) => {
+  try {
+    const { name, email, role, isActive } = req.body;
+    const { id } = req.params;
+
+    const updateData = {};
+    if (name) updateData.name = name;
+    if (email) updateData.email = email;
+    if (role) updateData.role = role;
+    if (typeof isActive === "boolean") updateData.isActive = isActive;
+
+    const updatedUser = await User.findByIdAndUpdate(
+      id,
+      { $set: updateData },
+      { new: true, runValidators: true }
+    ).select("-password -refreshToken");
+
+    if (!updatedUser) {
+      return res.status(404).json({ msg: "Usuário não encontrado." });
+    }
+
+    await ActivityLog.create({
+      userId: req.user.id,
+      action: "Usuário atualizado por Admin",
+      details: `Dados do usuário ${id} foram atualizados.`,
+    });
+
+    res.json({ msg: "Usuário atualizado com sucesso.", user: updatedUser });
+  } catch (error) {
+    logger.error("Erro ao atualizar usuário pelo admin:", error);
+    if (error.code === 11000) {
+      return res.status(400).json({ msg: "Este e-mail já está em uso." });
+    }
+    res.status(500).json({ msg: "Erro no servidor" });
   }
 };

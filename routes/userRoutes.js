@@ -6,7 +6,9 @@ const { validate } = require("../middleware/validate");
 const auth = require("../middleware/auth");
 const Joi = require("joi");
 
-// Schema de validação para registro
+// --- Schemas de Validação ---
+
+// Schema para registro
 const registerSchema = Joi.object({
   name: Joi.string().min(2).required(),
   email: Joi.string().email().required(),
@@ -14,16 +16,32 @@ const registerSchema = Joi.object({
   role: Joi.string().valid("admin", "perito", "assistente"),
 });
 
-// Schema de validação para login
+// Schema para login
 const loginSchema = Joi.object({
   email: Joi.string().email().required(),
   password: Joi.string().min(6).required(),
 });
 
-// Schema de validação para refresh token
+// Schema para refresh token
 const refreshTokenSchema = Joi.object({
   refreshToken: Joi.string().required(),
 });
+
+// Schema para atualização do próprio perfil
+const updateProfileSchema = Joi.object({
+  name: Joi.string().min(2),
+  email: Joi.string().email(),
+}).min(1); // Exige que pelo menos um campo seja enviado
+
+// Schema para atualização de usuário por um admin
+const updateUserSchema = Joi.object({
+  name: Joi.string().min(2),
+  email: Joi.string().email(),
+  role: Joi.string().valid("admin", "perito", "assistente"),
+  isActive: Joi.boolean(),
+}).min(1); // Exige que pelo menos um campo seja enviado
+
+// --- Definição das Rotas ---
 
 // Rotas que não precisam de autenticação
 router.post("/register", validate(registerSchema), userController.registerUser);
@@ -37,7 +55,22 @@ router.post(
   userController.refreshToken
 );
 router.get("/", auth(["admin"]), userController.getAllUsers);
-router.put("/:id/role", auth(["admin"]), userController.updateUserRole);
+
+// Rota para o usuário logado atualizar o próprio perfil (nome e email)
+router.put(
+  "/profile",
+  auth(),
+  validate(updateProfileSchema),
+  userController.updateMyProfile
+);
+
+// Rota para o admin atualizar qualquer usuário (nome, email, role, isActive)
+router.put(
+  "/:id",
+  auth(["admin"]),
+  validate(updateUserSchema),
+  userController.updateUser
+);
 
 // Rotas que precisam de autenticação
 router.post("/logout", auth(), userController.logoutUser);

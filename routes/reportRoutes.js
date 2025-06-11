@@ -78,7 +78,7 @@ const reportSchema = Joi.object({
 
 router.post(
   "/",
-  auth(["perito", "admin"]),
+  auth(["perito", "admin", "assistente"]), // <-- ALTERAÇÃO AQUI
   validate(reportSchema),
   reportController.createReport
 );
@@ -86,7 +86,7 @@ router.get("/", auth(), reportController.getReports);
 
 router.get(
   "/generate-pdf/:caseId",
-  auth(["perito", "admin"]),
+  auth(["perito", "admin", "assistente"]), // <-- ALTERAÇÃO AQUI
   async (req, res) => {
     try {
       const { caseId } = req.params;

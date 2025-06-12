@@ -97,8 +97,9 @@ router.get(
       if (!caso) {
         return res.status(404).json({ message: "Caso não encontrado" });
       }
+      // Permite que admin, perito, ou o criador do caso gerem o laudo.
       if (
-        req.user.role !== "admin" &&
+        !["admin", "perito"].includes(req.user.role) &&
         caso.createdBy.toString() !== req.user.id
       ) {
         return res
@@ -423,19 +424,26 @@ router.get(
           "Diante do exposto e com base nas análises das evidências e informações dos envolvidos, conclui-se que...",
           { align: "justify" }
         );
-      doc.moveDown(5);
+
+      doc.moveDown(5); // Espaço após a conclusão
+
+      // Data de geração
       doc
         .font("Helvetica")
-        .text("_________________________________", { align: "center" });
+        .fontSize(10)
+        .text(
+          `Gerado em: ${new Date().toLocaleDateString(
+            "pt-BR"
+          )} às ${new Date().toLocaleTimeString("pt-BR")}`,
+          { align: "left" }
+        );
+
+      doc.moveDown(2); // Espaço entre a data e a assinatura
+
+      // Campo de assinatura por último, à esquerda e sem linha.
       doc
         .font("Helvetica-Bold")
-        .text("Assinatura do Perito Responsável", { align: "center" });
-      doc.moveDown(2);
-      doc.text(
-        `Gerado em: ${new Date().toLocaleDateString(
-          "pt-BR"
-        )} às ${new Date().toLocaleTimeString("pt-BR")}`
-      );
+        .text("Assinatura do Perito Responsável", { align: "left" });
 
       doc.end();
     } catch (error) {

@@ -6,7 +6,6 @@ const logger = require("../utils/logger");
 const fetch = (...args) =>
   import("node-fetch").then(({ default: fetch }) => fetch(...args));
 
-
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY; // Recomendado usar variável de ambiente
 
 // Função auxiliar para gerar texto com Gemini
@@ -62,13 +61,14 @@ exports.createReport = async (req, res) => {
       return res.status(404).json({ message: "Caso não encontrado" });
     }
 
-    // Verificar permissão
+    // Verificar permissão: permite que admin, perito, ou o criador do caso gerem o laudo.
     if (
-      req.user.role !== "admin" &&
+      !["admin", "perito"].includes(req.user.role) &&
       caso.createdBy.toString() !== req.user.id
     ) {
       return res.status(403).json({
-        message: "Sem permissão para criar laudo neste caso",
+        message:
+          "Sem permissão para criar laudo neste caso. Apenas peritos, administradores ou o criador do caso podem realizar esta ação.",
       });
     }
 
@@ -163,12 +163,16 @@ exports.downloadReport = async (req, res) => {
   try {
     const report = await Report.findById(req.params.reportId);
     if (!report || !report.pdfPath) {
-      return res.status(404).json({ message: "Laudo não encontrado ou sem PDF" });
+      return res
+        .status(404)
+        .json({ message: "Laudo não encontrado ou sem PDF" });
     }
 
     res.download(report.pdfPath);
   } catch (error) {
     console.error("Erro ao baixar laudo:", error);
-    return res.status(500).json({ message: "Erro ao baixar laudo", error: error.message });
+    return res
+      .status(500)
+      .json({ message: "Erro ao baixar laudo", error: error.message });
   }
 };

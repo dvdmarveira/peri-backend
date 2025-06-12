@@ -59,7 +59,8 @@ exports.uploadEvidence = async (req, res) => {
       content: content || "",
       annotations: parsedAnnotations,
       uploadedBy: req.user.id,
-      filePaths: files ? files.map((file) => file.path) : [],
+      // MODIFICAÇÃO: Salvar apenas o nome do arquivo (file.filename) em vez do caminho completo (file.path)
+      filePaths: files ? files.map((file) => file.filename) : [],
       // --- ALTERAÇÃO AQUI ---
       address: address || null, // Adiciona o endereço
       // --- FIM DA ALTERAÇÃO ---
